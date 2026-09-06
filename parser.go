@@ -1,8 +1,8 @@
 package json
 
-import "github.com/tinywasm/model"
+import "webtyp.com/model"
 
-import "github.com/tinywasm/fmt"
+import "webtyp.com/fmt"
 
 type parser struct {
 	data []byte

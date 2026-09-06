@@ -1,9 +1,9 @@
 package json
 
-import "github.com/tinywasm/model"
+import "webtyp.com/model"
 
 import (
-	"github.com/tinywasm/fmt"
+	"webtyp.com/fmt"
 )
 
 // Writer is io.Writer redeclared here. Structurally identical, so any

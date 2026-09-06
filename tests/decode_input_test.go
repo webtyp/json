@@ -1,10 +1,10 @@
 package tests
 
-import "github.com/tinywasm/model"
+import "webtyp.com/model"
 
 import (
 	"bytes"
-	"github.com/tinywasm/json"
+	"webtyp.com/json"
 	"testing"
 )
 

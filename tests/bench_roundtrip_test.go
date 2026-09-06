@@ -3,10 +3,10 @@ package tests
 import (
     stdjson "encoding/json"
     "testing"
-    "github.com/tinywasm/json"
+    "webtyp.com/json"
 )
 
-func BenchmarkRoundTrip_tinywasm(b *testing.B) {
+func BenchmarkRoundTrip_webtyp(b *testing.B) {
     b.ReportAllocs()
     for i := 0; i < b.N; i++ {
         var out string

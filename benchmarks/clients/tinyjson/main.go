@@ -2,12 +2,12 @@
 
 package main
 
-import "github.com/tinywasm/model"
+import "webtyp.com/model"
 
 import (
 	"syscall/js"
 
-	"github.com/tinywasm/json"
+	"webtyp.com/json"
 )
 
 type User struct {

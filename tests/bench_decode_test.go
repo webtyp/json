@@ -3,12 +3,12 @@ package tests
 import (
     stdjson "encoding/json"
     "testing"
-    "github.com/tinywasm/json"
+    "webtyp.com/json"
 )
 
 var benchJSONStr = `{"name":"Alice","email":"alice@example.com","age":30,"score":9.5}`
 
-func BenchmarkDecode_tinywasm(b *testing.B) {
+func BenchmarkDecode_webtyp(b *testing.B) {
     b.ReportAllocs()
     for i := 0; i < b.N; i++ {
         u := &benchUser{}

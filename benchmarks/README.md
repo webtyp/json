@@ -48,7 +48,7 @@ of 3 runs, `go test -bench=. -benchmem -count=3 ./tests/...`)
 
 ### Go Benchmark (`go test -bench`)
 
-| Benchmark | tinywasm/json | encoding/json | Faster | Δ allocs |
+| Benchmark | webtyp/json | encoding/json | Faster | Δ allocs |
 |-----------|---------------|---------------|--------|----------|
 | Encode    | 604 ns/op 80 B/op 1 allocs | 799 ns/op 80 B/op 1 allocs | +24% | 0 |
 | Decode    | 1503 ns/op 125 B/op 5 allocs | 3098 ns/op 376 B/op 8 allocs | +51% | -3 |
@@ -71,16 +71,16 @@ Compiled with `tinygo build -target wasm -no-debug -opt=z`.
 
 | Implementation | Uncompressed | Gzipped |
 | :--- | :--- | :--- |
-| **tinywasm/json** | **51 KB** | **20 KB** |
+| **webtyp/json** | **51 KB** | **20 KB** |
 | encoding/json (stdlib) | 270 KB | 118 KB |
 
-> Run: `./build.sh` (tinywasm/json) and `./build.sh stlib` (stdlib) from this directory.
+> Run: `./build.sh` (webtyp/json) and `./build.sh stlib` (stdlib) from this directory.
 
 ### Analysis
 
-**tinywasm/json is 83% smaller gzipped** (20 KB vs 118 KB) making it ideal for web apps where bundle size matters. By eliminating the `reflect` package, it not only significantly reduces the final WASM binary size, but also makes **encoding ~1.3x faster**, **decoding ~2.1x faster**, and **roundtripping ~1.7x faster** than the standard library.
+**webtyp/json is 83% smaller gzipped** (20 KB vs 118 KB) making it ideal for web apps where bundle size matters. By eliminating the `reflect` package, it not only significantly reduces the final WASM binary size, but also makes **encoding ~1.3x faster**, **decoding ~2.1x faster**, and **roundtripping ~1.7x faster** than the standard library.
 
-**Use tinywasm/json when:** Bundle size and raw decoding performance are critical, or running in restricted WASM environments.
-**Use Stdlib when:** You need to work dynamically with arbitrary unknown schemas (like `map[string]any`), as tinywasm/json is optimized strictly for predefined structs (`fmt.Encodable`/`fmt.Decodable`).
+**Use webtyp/json when:** Bundle size and raw decoding performance are critical, or running in restricted WASM environments.
+**Use Stdlib when:** You need to work dynamically with arbitrary unknown schemas (like `map[string]any`), as webtyp/json is optimized strictly for predefined structs (`fmt.Encodable`/`fmt.Decodable`).
 
 See the [main README](../README.md#benchmarks) for detailed benchmark results.

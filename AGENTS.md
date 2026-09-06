@@ -1,4 +1,4 @@
-# AGENTS.md — tinywasm/json
+# AGENTS.md — webtyp/json
 
 Working notes for AI agents operating in this library. For end-user docs see [README.md](README.md).
 Plans for code changes live in [docs/PLAN.md](docs/PLAN.md) and link back here for the standing
@@ -6,7 +6,7 @@ rules below (do not duplicate them in plans).
 
 ## Mission
 
-`tinywasm/json` is a **reflection-free, map-free** JSON encoder/decoder for TinyGo + WASM. It is
+`webtyp/json` is a **reflection-free, map-free** JSON encoder/decoder for TinyGo + WASM. It is
 the ecosystem **exemplar** for typed serialization: it never imports `encoding/json`, `reflect`,
 or uses `map`. Encoding/decoding is driven by the model's typed contract (`fmt.Encodable`/
 `fmt.Decodable` — see `docs/PLAN.md`).
@@ -14,7 +14,7 @@ or uses `map`. Encoding/decoding is driven by the model's typed contract (`fmt.E
 ## Ecosystem restrictions (do NOT violate)
 
 - **No standard library for strings/encoding.** Never import `encoding/json`, `errors`,
-  `strconv`, `strings`, `fmt` (stdlib). Use `github.com/tinywasm/fmt`:
+  `strconv`, `strings`, `fmt` (stdlib). Use `webtyp.com/fmt`:
   - `fmt.Err("Noun","Adjective")` / `fmt.Errf(...)` instead of `errors`/`fmt.Errorf`.
   - `fmt.Convert(s).Int()` instead of `strconv`.
   - `fmt.Contains`/`fmt.HasPrefix`/`fmt.Index` instead of `strings`.
@@ -30,7 +30,7 @@ or uses `map`. Encoding/decoding is driven by the model's typed contract (`fmt.E
 
 ## Serialization codec (target contract)
 
-Serialization is moving to the typed visitor codec defined in `tinywasm/fmt`
+Serialization is moving to the typed visitor codec defined in `webtyp/fmt`
 (`Encodable`/`Decodable` + `FieldWriter`/`FieldReader`): typed calls, **0-alloc, map-free, no
 `any`**. `json` owns the canonical JSON `FieldWriter`/`FieldReader` (it has the parser); `fmt`
 does NOT ship a JSON encoder (avoids a second way). See `docs/PLAN.md` and
@@ -40,7 +40,7 @@ does NOT ship a JSON encoder (avoids a second way). See `docs/PLAN.md` and
 ## Testing
 
 ```bash
-go install github.com/tinywasm/devflow/cmd/gotest@latest   # once
+go install webtyp.com/devflow/cmd/gotest@latest   # once
 gotest            # vet + race + cover + wasm + badges (NOT `go test`)
 gotest -run TestX
 ```
@@ -57,5 +57,5 @@ gopush 'message'   # tests + tag + push + dependency bumps (NOT git commit/push 
 
 ## Related
 
-- [`tinywasm/fmt`](https://github.com/tinywasm/fmt) — `Conv`, `JSONEscape`, the codec contract.
-- [`tinywasm/ormc`](https://github.com/tinywasm/ormc) — `ormc` generates the models' typed methods.
+- [`webtyp/fmt`](https://github.com/webtyp/fmt) — `Conv`, `JSONEscape`, the codec contract.
+- [`webtyp/ormc`](https://github.com/webtyp/ormc) — `ormc` generates the models' typed methods.

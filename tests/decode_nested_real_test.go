@@ -6,8 +6,8 @@ package tests
 // every level, arrays discarded, and sibling fields after nested structs.
 
 import (
-	"github.com/tinywasm/json"
-	"github.com/tinywasm/model"
+	"webtyp.com/json"
+	"webtyp.com/model"
 	"testing"
 )
 
@@ -75,7 +75,7 @@ func TestDecodeNestedReal_HappyPath(t *testing.T) {
 		"params": {
 			"name": "search",
 			"input": {
-				"query": "tinywasm",
+				"query": "webtyp",
 				"limit": 10,
 				"verbose": true
 			}
@@ -93,8 +93,8 @@ func TestDecodeNestedReal_HappyPath(t *testing.T) {
 	if req.Params.Name != "search" {
 		t.Errorf("params.name: want search got %s", req.Params.Name)
 	}
-	if req.Params.Input.Query != "tinywasm" {
-		t.Errorf("input.query: want tinywasm got %s", req.Params.Input.Query)
+	if req.Params.Input.Query != "webtyp" {
+		t.Errorf("input.query: want webtyp got %s", req.Params.Input.Query)
 	}
 	if req.Params.Input.Limit != 10 {
 		t.Errorf("input.limit: want 10 got %d", req.Params.Input.Limit)

@@ -6,7 +6,7 @@ REVIEWER: none
 
 > Este plan se despacha con el flujo CodeJob. Ver skill: agents-workflow.
 
-# Plan — `tinywasm/json`: cerrar la puerta a `io`
+# Plan — `webtyp/json`: cerrar la puerta a `io`
 
 ## El problema
 
@@ -35,7 +35,7 @@ Se hace por la razón estructural, que sí está medida en un Worker real:
 `unicode` y `bytes` entraban a ese binario por dos caminos. Cerrar uno rendía
 2.119 bytes; cerrar los dos, 93.733. Cada puerta que queda abierta hace que
 cerrar las demás parezca inútil, y así es como una cadena de 90 KB sobrevive
-años. `tinywasm/json` está en casi todos los binarios del ecosistema: es una de
+años. `webtyp/json` está en casi todos los binarios del ecosistema: es una de
 las puertas que hay que cerrar para que las demás cuenten.
 
 ## El cambio
@@ -75,7 +75,7 @@ return fmt.Err("json", "encode", "output must be *[]byte, *string, or json.Write
 ## Criterios de aceptación
 
 - [ ] `GOOS=js GOARCH=wasm go list -f '{{join .Imports " "}}' .` devuelve
-      exactamente `github.com/tinywasm/fmt github.com/tinywasm/model unsafe`.
+      exactamente `webtyp.com/fmt webtyp.com/model unsafe`.
 - [ ] `grep -rn '"io"\|"errors"\|"bytes"\|"strings"\|"strconv"\|"encoding/json"' *.go | grep -v _test`
       → vacío.
 - [ ] Un test pasa un `*bytes.Buffer` de la stdlib a `Encode` y un

@@ -1,10 +1,10 @@
 package tests
 
-import "github.com/tinywasm/model"
+import "webtyp.com/model"
 
 import (
 	stdjson "encoding/json"
-	"github.com/tinywasm/json"
+	"webtyp.com/json"
 	"testing"
 )
 
@@ -34,7 +34,7 @@ func (u *benchUser) Pointers() []any       { return nil }
 
 var benchInput = &benchUser{Name: "alice", Email: "alice@example.com", Age: 30, Score: 9.5}
 
-func BenchmarkEncode_tinywasm(b *testing.B) {
+func BenchmarkEncode_webtyp(b *testing.B) {
 	var out string
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
