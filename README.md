@@ -121,6 +121,12 @@ Parses JSON into `data`.
 - **input**: `[]byte`, `string`, or `io.Reader`.
 - **data**: `model.Decodable` → expects `{...}` or `[...]`
 
+### `Keys(object string) ([]string, error)`
+
+The field names of a JSON object, in document order, for objects whose names are data rather
+than known fields, such as the `properties` of a JSON Schema:
+`json.Keys(`{"query":{"type":"string"},"status":{"enum":["a","b"]}}`)` → `["query", "status"]`.
+
 ## Benchmarks
 
 webtyp/json is **83% smaller** than `encoding/json` in WASM (51 KB vs 270 KB, 20 KB vs 118 KB gzipped), **zero-reflect**, and **0-allocation** on the serialization hot path.
