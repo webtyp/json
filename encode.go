@@ -3,6 +3,7 @@ package json
 import "webtyp.com/model"
 
 import (
+	"webtyp.com/escape"
 	"webtyp.com/fmt"
 )
 
@@ -27,7 +28,7 @@ func (w *jsonWriter) maybeComma() {
 func (w *jsonWriter) writeKey(name string) {
 	if name != "" {
 		w.b.WriteByte('"')
-		fmt.JSONEscape(name, w.b)
+		escape.JSON(w.b, name)
 		w.b.WriteByte('"')
 		w.b.WriteByte(':')
 	}
@@ -37,7 +38,7 @@ func (w *jsonWriter) String(name, val string) {
 	w.maybeComma()
 	w.writeKey(name)
 	w.b.WriteByte('"')
-	fmt.JSONEscape(val, w.b)
+	escape.JSON(w.b, val)
 	w.b.WriteByte('"')
 }
 
@@ -73,7 +74,7 @@ func (w *jsonWriter) Bytes(name string, val []byte) {
 	w.maybeComma()
 	w.writeKey(name)
 	w.b.WriteByte('"')
-	fmt.JSONEscape(string(val), w.b)
+	escape.JSON(w.b, string(val))
 	w.b.WriteByte('"')
 }
 
@@ -139,7 +140,7 @@ func (w *jsonArrayWriter) maybeComma() {
 func (w *jsonArrayWriter) String(val string) {
 	w.maybeComma()
 	w.b.WriteByte('"')
-	fmt.JSONEscape(val, w.b)
+	escape.JSON(w.b, val)
 	w.b.WriteByte('"')
 }
 
@@ -165,7 +166,7 @@ func (w *jsonArrayWriter) Bool(val bool) {
 func (w *jsonArrayWriter) Bytes(val []byte) {
 	w.maybeComma()
 	w.b.WriteByte('"')
-	fmt.JSONEscape(string(val), w.b)
+	escape.JSON(w.b, string(val))
 	w.b.WriteByte('"')
 }
 
