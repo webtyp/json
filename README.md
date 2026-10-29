@@ -111,6 +111,8 @@ for by default — reach for `model.Definition` + `ormc` first.
 
 Serializes to JSON. If `data` is a collection of objects, it is encoded as a JSON array `[...]`; otherwise as an object `{...}`.
 
+`Array(name, n)` writes exactly `n` elements and closes itself after the last one; announcing a different count than you write makes `Encode` return an error. `Close()` is not needed (it is removed in a later version).
+
 - **data**: `model.Encodable` → `{...}` or `[...]`
 - **output**: `*[]byte`, `*string`, or `io.Writer`.
 
