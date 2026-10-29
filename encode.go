@@ -7,7 +7,6 @@ import (
 	"webtyp.com/fmt"
 )
 
-
 // encodeState carries the first error of one Encode call to every nested writer.
 type encodeState struct{ err error }
 
