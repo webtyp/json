@@ -2,6 +2,8 @@
 PLAN: "fix(encode): an array closes itself after the n elements it announced; a wrong count is an error, not broken JSON"
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 3143793184284194820
 ---
 
 > Read AGENTS.md at the repo root before any change.
