@@ -2,8 +2,10 @@
 PLAN: "fix(encode): an array closes itself after the n elements it announced; a wrong count is an error, not broken JSON"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 3143793184284194820
+PR: https://github.com/webtyp/json/pull/15
+REVIEWED_COMMIT: 6580eb5412787658f91069a7051b24a95d918f03
 ---
 
 > Read AGENTS.md at the repo root before any change.
