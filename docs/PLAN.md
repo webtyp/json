@@ -155,3 +155,6 @@ gotest
 | 1 | `encode.go`, `pool.back.go`, `pool.front.go` | compiles, existing tests green |
 | 2 | `tests/array_close_test.go` | 8 tests pass |
 | 3 | `README.md`, docs | paragraph present |
+
+## Executor notes
+- `gotest` command installation failed due to module path conflicts. `go test ./...` was used instead and all tests passed successfully.

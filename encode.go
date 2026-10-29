@@ -7,6 +7,26 @@ import (
 	"webtyp.com/fmt"
 )
 
+
+// encodeState carries the first error of one Encode call to every nested writer.
+type encodeState struct{ err error }
+
+func (s *encodeState) fail(err error) {
+	if s.err == nil {
+		s.err = err
+	}
+}
+
+// errArrayShort: the caller announced n elements and wrote fewer.
+func errArrayShort(name string, want, got int) error {
+	return fmt.Err("json", "encode", "array", name, "announced", fmt.Convert(want).String(), "got", fmt.Convert(got).String())
+}
+
+// errArrayLong: the caller wrote more elements than it announced.
+func errArrayLong(name string, want int) error {
+	return fmt.Err("json", "encode", "array", name, "announced", fmt.Convert(want).String(), "got more")
+}
+
 // Writer is io.Writer redeclared here. Structurally identical, so any
 // io.Writer satisfies it without the caller changing a line.
 type Writer interface {
@@ -16,9 +36,21 @@ type Writer interface {
 type jsonWriter struct {
 	b     *fmt.Conv
 	first bool
+	st    *encodeState
+	open  *jsonArrayWriter
+}
+
+func (w *jsonWriter) settle() {
+	if w.open != nil && !w.open.closed {
+		w.st.fail(errArrayShort(w.open.name, w.open.want, w.open.got))
+		w.b.WriteByte(']')
+		w.open.closed = true
+	}
+	w.open = nil
 }
 
 func (w *jsonWriter) maybeComma() {
+	w.settle()
 	if !w.first {
 		w.b.WriteByte(',')
 	}
@@ -110,7 +142,10 @@ func (w *jsonWriter) Object(name string, val model.Encodable) {
 	iw := getWriter()
 	iw.b = w.b
 	iw.first = true
+	iw.st = w.st
+	iw.open = nil
 	val.EncodeFields(iw)
+	iw.settle()
 	w.b.WriteByte('}')
 	putWriter(iw)
 }
@@ -119,15 +154,48 @@ func (w *jsonWriter) Array(name string, n int) model.ArrayWriter {
 	w.maybeComma()
 	w.writeKey(name)
 	w.b.WriteByte('[')
-	aw := getArrayWriter()
-	aw.b = w.b
-	aw.first = true
+	aw := &jsonArrayWriter{
+		b:     w.b,
+		first: true,
+		name:  name,
+		want:  n,
+		st:    w.st,
+	}
+	if n <= 0 {
+		w.b.WriteByte(']')
+		aw.closed = true
+	} else {
+		w.open = aw
+	}
 	return aw
 }
 
 type jsonArrayWriter struct {
-	b     *fmt.Conv
-	first bool
+	b      *fmt.Conv
+	first  bool
+	name   string
+	want   int
+	got    int
+	closed bool
+	st     *encodeState
+}
+
+// push admits one element; after the last announced one it closes the array.
+func (w *jsonArrayWriter) push() bool {
+	if w.closed {
+		w.st.fail(errArrayLong(w.name, w.want))
+		return false
+	}
+	w.got++
+	w.maybeComma()
+	return true
+}
+
+func (w *jsonArrayWriter) done() {
+	if w.got == w.want {
+		w.b.WriteByte(']')
+		w.closed = true
+	}
 }
 
 func (w *jsonArrayWriter) maybeComma() {
@@ -138,60 +206,87 @@ func (w *jsonArrayWriter) maybeComma() {
 }
 
 func (w *jsonArrayWriter) String(val string) {
-	w.maybeComma()
+	if !w.push() {
+		return
+	}
 	w.b.WriteByte('"')
 	escape.JSON(w.b, val)
 	w.b.WriteByte('"')
+	w.done()
 }
 
 func (w *jsonArrayWriter) Int(val int64) {
-	w.maybeComma()
+	if !w.push() {
+		return
+	}
 	w.b.WriteInt(val)
+	w.done()
 }
 
 func (w *jsonArrayWriter) Float(val float64) {
-	w.maybeComma()
+	if !w.push() {
+		return
+	}
 	w.b.WriteFloat(val)
+	w.done()
 }
 
 func (w *jsonArrayWriter) Bool(val bool) {
-	w.maybeComma()
+	if !w.push() {
+		return
+	}
 	if val {
 		w.b.WriteString("true")
 	} else {
 		w.b.WriteString("false")
 	}
+	w.done()
 }
 
 func (w *jsonArrayWriter) Bytes(val []byte) {
-	w.maybeComma()
+	if !w.push() {
+		return
+	}
 	w.b.WriteByte('"')
 	escape.JSON(w.b, string(val))
 	w.b.WriteByte('"')
+	w.done()
 }
 
 func (w *jsonArrayWriter) Object(val model.Encodable) {
-	w.maybeComma()
+	if !w.push() {
+		return
+	}
 	if val == nil || val.IsNil() {
 		w.b.WriteString("null")
+		w.done()
 		return
 	}
 	if r, ok := val.(interface{ Raw() string }); ok {
 		w.b.WriteString(r.Raw())
+		w.done()
 		return
 	}
 	w.b.WriteByte('{')
 	iw := getWriter()
 	iw.b = w.b
 	iw.first = true
+	iw.st = w.st
+	iw.open = nil
 	val.EncodeFields(iw)
+	iw.settle()
 	w.b.WriteByte('}')
 	putWriter(iw)
+	w.done()
 }
 
 func (w *jsonArrayWriter) Close() {
+	if w.closed {
+		return
+	}
+	w.st.fail(errArrayShort(w.name, w.want, w.got))
 	w.b.WriteByte(']')
-	putArrayWriter(w)
+	w.closed = true
 }
 
 // Encode serializes an Encodable to JSON.
@@ -199,6 +294,7 @@ func (w *jsonArrayWriter) Close() {
 func Encode(data model.Encodable, output any) error {
 	b := fmt.GetConv()
 	defer b.PutConv()
+	st := &encodeState{}
 
 	if data == nil || data.IsNil() {
 		b.WriteString("null")
@@ -206,6 +302,8 @@ func Encode(data model.Encodable, output any) error {
 		w := getWriter()
 		w.b = b
 		w.first = true
+		w.st = st
+		w.open = nil
 
 		var slice model.FielderSlice
 		if s, ok := data.(interface{ FielderSlice() model.FielderSlice }); ok {
@@ -224,11 +322,14 @@ func Encode(data model.Encodable, output any) error {
 					iw := getWriter()
 					iw.b = b
 					iw.first = true
+					iw.st = st
+					iw.open = nil
 					if it.IsNil() {
 						b.WriteString("null")
 					} else {
 						b.WriteByte('{')
 						it.EncodeFields(iw)
+						iw.settle()
 						b.WriteByte('}')
 					}
 					putWriter(iw)
@@ -240,6 +341,7 @@ func Encode(data model.Encodable, output any) error {
 		} else {
 			b.WriteByte('{')
 			data.EncodeFields(w)
+			w.settle()
 			b.WriteByte('}')
 		}
 		putWriter(w)
@@ -247,6 +349,9 @@ func Encode(data model.Encodable, output any) error {
 
 	if b.GetString(fmt.BuffErr) != "" {
 		return fmt.Err(b.GetString(fmt.BuffErr))
+	}
+	if st.err != nil {
+		return st.err
 	}
 
 	switch out := output.(type) {
