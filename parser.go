@@ -10,9 +10,12 @@ type parser struct {
 }
 
 type jsonReader struct {
-	p     *parser
-	start int // offset of the object '{'
-	err   error
+	p       *parser
+	start   int // offset of the object '{'
+	nextPos int // offset right after the previously decoded field value (0 if none)
+	err     error
+	rootP   parser
+	arr     jsonArrayReader
 }
 
 func (r *jsonReader) String(name string) (string, bool) {
@@ -39,6 +42,7 @@ func (r *jsonReader) String(name string) (string, bool) {
 		r.err = err
 		return "", false
 	}
+	r.nextPos = r.p.pos
 	return val, true
 }
 
@@ -62,14 +66,16 @@ func (r *jsonReader) Int(name string) (int64, bool) {
 		r.err = err
 		return 0, false
 	}
+	end := r.p.pos
 	c := fmt.GetConv()
 	defer c.PutConv()
-	c.LoadBytes(r.p.data[start:r.p.pos])
+	c.LoadBytes(r.p.data[start:end])
 	val, err := c.Int64()
 	if err != nil {
 		r.err = err
 		return 0, false
 	}
+	r.nextPos = end
 	return val, true
 }
 
@@ -92,14 +98,16 @@ func (r *jsonReader) Uint(name string) (uint64, bool) {
 		r.err = err
 		return 0, false
 	}
+	end := r.p.pos
 	c := fmt.GetConv()
 	defer c.PutConv()
-	c.LoadBytes(r.p.data[start:r.p.pos])
+	c.LoadBytes(r.p.data[start:end])
 	val, err := c.Uint64()
 	if err != nil {
 		r.err = err
 		return 0, false
 	}
+	r.nextPos = end
 	return val, true
 }
 
@@ -122,14 +130,16 @@ func (r *jsonReader) Float(name string) (float64, bool) {
 		r.err = err
 		return 0, false
 	}
+	end := r.p.pos
 	c := fmt.GetConv()
 	defer c.PutConv()
-	c.LoadBytes(r.p.data[start:r.p.pos])
+	c.LoadBytes(r.p.data[start:end])
 	val, err := c.Float64()
 	if err != nil {
 		r.err = err
 		return 0, false
 	}
+	r.nextPos = end
 	return val, true
 }
 
@@ -153,6 +163,7 @@ func (r *jsonReader) Bool(name string) (bool, bool) {
 		r.err = err
 		return false, false
 	}
+	r.nextPos = r.p.pos
 	return val, true
 }
 
@@ -184,6 +195,7 @@ func (r *jsonReader) Raw(name string) (string, bool) {
 		r.err = err
 		return "", false
 	}
+	r.nextPos = r.p.pos
 	return string(r.p.data[start:r.p.pos]), true
 }
 
@@ -203,7 +215,9 @@ func (r *jsonReader) Object(name string, into model.Decodable) bool {
 	r.p.next() // consume ':'
 	r.p.skipWhitespace()
 	if r.p.peek() == 'n' {
-		r.p.parseNull()
+		if err := r.p.parseNull(); err == nil {
+			r.nextPos = r.p.pos
+		}
 		return true
 	}
 	if r.p.peek() != '{' {
@@ -213,6 +227,7 @@ func (r *jsonReader) Object(name string, into model.Decodable) bool {
 	innerReader := getReader()
 	innerReader.p = r.p
 	innerReader.start = objStart
+	innerReader.nextPos = 0
 	innerReader.err = nil
 	into.DecodeFields(innerReader)
 	if innerReader.err != nil {
@@ -220,9 +235,21 @@ func (r *jsonReader) Object(name string, into model.Decodable) bool {
 		putReader(innerReader)
 		return false
 	}
+	endHint := innerReader.nextPos
 	putReader(innerReader)
-	r.p.pos = objStart
-	r.p.skipObject()
+	if endHint > objStart {
+		r.p.pos = endHint
+		r.p.skipWhitespace()
+		if r.p.peek() == '}' {
+			r.p.next()
+			r.nextPos = r.p.pos
+			return true
+		}
+	}
+	r.p.pos = objStart + 1
+	if err := r.p.skipObject(); err == nil {
+		r.nextPos = r.p.pos
+	}
 	return true
 }
 
@@ -245,16 +272,37 @@ func (r *jsonReader) Array(name string) (model.ArrayReader, bool) {
 		return nil, false
 	}
 	arrayStart := r.p.pos
-	return &jsonArrayReader{p: r.p, start: arrayStart}, true
+	r.arr = jsonArrayReader{p: r.p, start: arrayStart}
+	return &r.arr, true
 }
 
 func (r *jsonReader) scanToKey(name string) (bool, error) {
+	prevNext := r.nextPos
+	r.nextPos = 0
+	if prevNext > r.start {
+		r.p.pos = prevNext
+		r.p.skipWhitespace()
+		c := r.p.peek()
+		if c == ',' {
+			r.p.next()
+			found, err := r.scanKeysFromCurrent(name)
+			if err != nil || found {
+				return found, err
+			}
+		} else if c != '}' {
+			return false, fmt.Err("json", "decode", "expected , or }")
+		}
+	}
 	r.p.pos = r.start
 	r.p.skipWhitespace()
 	if r.p.peek() != '{' {
 		return false, fmt.Err("json", "decode", "expected { at "+string(r.p.peek()))
 	}
 	r.p.next()
+	return r.scanKeysFromCurrent(name)
+}
+
+func (r *jsonReader) scanKeysFromCurrent(name string) (bool, error) {
 	for {
 		r.p.skipWhitespace()
 		if r.p.peek() == '}' {
@@ -293,11 +341,17 @@ func (r *jsonReader) scanToKey(name string) (bool, error) {
 }
 
 type jsonArrayReader struct {
-	p     *parser
-	start int // offset of '['
+	p      *parser
+	start  int // offset of '['
+	curIdx int // index of element at curPos
+	curPos int // offset of the start of element curIdx (> start when valid)
+	length int // cached length + 1 (0 if not computed yet)
 }
 
 func (r *jsonArrayReader) Len() int {
+	if r.length > 0 {
+		return r.length - 1
+	}
 	r.p.pos = r.start
 	r.p.skipWhitespace()
 	if r.p.next() != '[' {
@@ -305,8 +359,10 @@ func (r *jsonArrayReader) Len() int {
 	}
 	r.p.skipWhitespace()
 	if r.p.peek() == ']' {
+		r.length = 1
 		return 0
 	}
+	firstPos := r.p.pos
 	count := 0
 	for {
 		if err := r.p.skipValue(); err != nil {
@@ -316,6 +372,9 @@ func (r *jsonArrayReader) Len() int {
 		r.p.skipWhitespace()
 		c := r.p.next()
 		if c == ']' {
+			r.curIdx = 0
+			r.curPos = firstPos
+			r.length = count + 1
 			return count
 		}
 		if c != ',' {
@@ -324,19 +383,34 @@ func (r *jsonArrayReader) Len() int {
 	}
 }
 
-func (r jsonArrayReader) seekToIndex(i int) bool {
-	r.p.pos = r.start
-	r.p.skipWhitespace()
-	if r.p.peek() != '[' {
+func (r *jsonArrayReader) seekToIndex(i int) bool {
+	if i < 0 {
 		return false
 	}
-	r.p.next() // consume '['
-	for j := 0; j <= i; j++ {
+	j := 0
+	if r.curPos > r.start && i >= r.curIdx {
+		if i == r.curIdx {
+			r.p.pos = r.curPos
+			return true
+		}
+		r.p.pos = r.curPos
+		j = r.curIdx
+	} else {
+		r.p.pos = r.start
+		r.p.skipWhitespace()
+		if r.p.peek() != '[' {
+			return false
+		}
+		r.p.next() // consume '['
+	}
+	for ; j <= i; j++ {
 		r.p.skipWhitespace()
 		if r.p.peek() == ']' {
 			return false
 		}
 		if j == i {
+			r.curIdx = i
+			r.curPos = r.p.pos
 			return true
 		}
 		if err := r.p.skipValue(); err != nil {
@@ -350,80 +424,128 @@ func (r jsonArrayReader) seekToIndex(i int) bool {
 	return false
 }
 
-func (r jsonArrayReader) String(i int) string {
+func (r *jsonArrayReader) advanceAfterElement(i int) {
+	r.p.skipWhitespace()
+	if r.p.peek() == ',' {
+		r.p.next()
+		r.p.skipWhitespace()
+		if r.p.peek() != ']' && r.p.pos < len(r.p.data) {
+			r.curIdx = i + 1
+			r.curPos = r.p.pos
+			return
+		}
+	}
+	r.curPos = 0
+}
+
+func (r *jsonArrayReader) String(i int) string {
 	if !r.seekToIndex(i) {
 		return ""
 	}
 	r.p.skipWhitespace()
 	if r.p.next() != '"' {
+		r.curPos = 0
 		return ""
 	}
-	val, _ := r.p.parseString()
+	val, err := r.p.parseString()
+	if err == nil {
+		r.advanceAfterElement(i)
+	} else {
+		r.curPos = 0
+	}
 	return val
 }
 
-func (r jsonArrayReader) Int(i int) int64 {
+func (r *jsonArrayReader) Int(i int) int64 {
 	if !r.seekToIndex(i) {
 		return 0
 	}
 	r.p.skipWhitespace()
 	start := r.p.pos
 	if err := r.p.skipNumber(); err != nil {
+		r.curPos = 0
 		return 0
 	}
+	end := r.p.pos
+	r.advanceAfterElement(i)
 	c := fmt.GetConv()
 	defer c.PutConv()
-	c.LoadBytes(r.p.data[start:r.p.pos])
+	c.LoadBytes(r.p.data[start:end])
 	val, _ := c.Int64()
 	return val
 }
 
-func (r jsonArrayReader) Float(i int) float64 {
+func (r *jsonArrayReader) Float(i int) float64 {
 	if !r.seekToIndex(i) {
 		return 0
 	}
 	r.p.skipWhitespace()
 	start := r.p.pos
 	if err := r.p.skipNumber(); err != nil {
+		r.curPos = 0
 		return 0
 	}
+	end := r.p.pos
+	r.advanceAfterElement(i)
 	c := fmt.GetConv()
 	defer c.PutConv()
-	c.LoadBytes(r.p.data[start:r.p.pos])
+	c.LoadBytes(r.p.data[start:end])
 	val, _ := c.Float64()
 	return val
 }
 
-func (r jsonArrayReader) Bool(i int) bool {
+func (r *jsonArrayReader) Bool(i int) bool {
 	if !r.seekToIndex(i) {
 		return false
 	}
-	val, _ := r.p.parseBool()
+	val, err := r.p.parseBool()
+	if err == nil {
+		r.advanceAfterElement(i)
+	} else {
+		r.curPos = 0
+	}
 	return val
 }
 
-func (r jsonArrayReader) Bytes(i int) []byte {
+func (r *jsonArrayReader) Bytes(i int) []byte {
 	return []byte(r.String(i))
 }
 
-func (r jsonArrayReader) Object(i int, into model.Decodable) bool {
+func (r *jsonArrayReader) Object(i int, into model.Decodable) bool {
 	if !r.seekToIndex(i) {
 		return false
 	}
 	r.p.skipWhitespace()
 	if r.p.peek() != '{' {
+		r.curPos = 0
 		return false
 	}
 	objStart := r.p.pos
 	innerReader := getReader()
 	innerReader.p = r.p
 	innerReader.start = objStart
+	innerReader.nextPos = 0
 	innerReader.err = nil
 	into.DecodeFields(innerReader)
-	r.p.pos = objStart
-	r.p.skipObject()
+	ok := innerReader.err == nil
+	endHint := innerReader.nextPos
 	putReader(innerReader)
-	return innerReader.err == nil
+	if ok && endHint > objStart {
+		r.p.pos = endHint
+		r.p.skipWhitespace()
+		if r.p.peek() == '}' {
+			r.p.next()
+			r.advanceAfterElement(i)
+			return true
+		}
+	}
+	r.p.pos = objStart + 1
+	if err := r.p.skipObject(); err == nil {
+		r.advanceAfterElement(i)
+	} else {
+		r.curPos = 0
+	}
+	return ok
 }
 
 func (p *parser) skipWhitespace() {

@@ -135,8 +135,10 @@ webtyp/json is **83% smaller** than `encoding/json` in WASM (51 KB vs 270 KB, 20
 
 | Benchmark | webtyp/json | encoding/json | Faster | Δ allocs |
 |-----------|---------------|---------------|--------|----------|
-| Encode    | 604 ns/op     | 799 ns/op     | +24%   | 0        |
-| Decode    | 1503 ns/op    | 3098 ns/op    | +51%   | -3       |
+| Encode    | 217 ns/op     | 244 ns/op     | +11%   | 0 (1 alloc) |
+| Decode    | 308 ns/op     | 1083 ns/op    | +72%   | -4       |
+| DecodeArray100 | 33.8 µs/op | 88.3 µs/op  | +62%   | -13      |
+| RoundTrip | 587 ns/op     | 1306 ns/op    | +55%   | -2       |
 
 See full results and analysis in [benchmarks/README.md](benchmarks/README.md).
 

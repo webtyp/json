@@ -42,28 +42,23 @@ Both files implement the same functionality to ensure fair comparison.
 
 ## Performance Results
 
-Last updated: 2026-07-11 (after fixing `fmt.JSONEscape` to bulk-copy safe byte
-runs instead of writing one byte at a time — see `fmt/docs/PLAN.md`; average
-of 3 runs, `go test -bench=. -benchmem -count=3 ./tests/...`)
+Last updated: 2026-11-07 (`go test -bench=. -benchmem ./tests/...`)
 
 ### Go Benchmark (`go test -bench`)
 
-| Benchmark | webtyp/json | encoding/json | Faster | Δ allocs |
-|-----------|---------------|---------------|--------|----------|
-| Encode    | 604 ns/op 80 B/op 1 allocs | 799 ns/op 80 B/op 1 allocs | +24% | 0 |
-| Decode    | 1503 ns/op 125 B/op 5 allocs | 3098 ns/op 376 B/op 8 allocs | +51% | -3 |
-| RoundTrip | 2315 ns/op 221 B/op 7 allocs | 3923 ns/op 376 B/op 8 allocs | +41% | -1 |
+| Benchmark | webtyp/json (before) | webtyp/json (after) | encoding/json | Faster vs stdlib | Δ allocs vs stdlib |
+|-----------|----------------------|---------------------|---------------|------------------|--------------------|
+| Encode | 244 ns/op · 96 B/op · 2 allocs | **217 ns/op · 80 B/op · 1 allocs** | 244 ns/op · 80 B/op · 1 allocs | **+11%** | 0 |
+| Decode | 483 ns/op · 125 B/op · 5 allocs | **308 ns/op · 93 B/op · 4 allocs** | 1083 ns/op · 376 B/op · 8 allocs | **+72% (3.5x)** | -4 |
+| DecodeArray100 | 540,092 ns/op · 38,340 B/op · 605 allocs | **33,819 ns/op · 7,849 B/op · 203 allocs** | 88,297 ns/op · 18,952 B/op · 216 allocs | **+62% (2.6x)** | -13 |
+| RoundTrip | 825 ns/op · 237 B/op · 8 allocs | **587 ns/op · 189 B/op · 6 allocs** | 1306 ns/op · 376 B/op · 8 allocs | **+55% (2.2x)** | -2 |
 
 > Run: `go test -bench=. -benchmem ./tests/...`
 >
-> Before the `JSONEscape` fix, Encode was essentially tied with stdlib
-> (753 ns/op vs 758 ns/op) — a CPU profile (`go tool pprof`) found
-> `fmt.JSONEscape` writing one byte at a time accounted for 43.75% of Encode's
-> CPU time, most of it spent re-escaping static, always-safe JSON field names
-> on every call. Fixing it to bulk-copy safe runs (mirroring how
-> `encoding/json` scans for the next special character) dropped `JSONEscape`
-> out of the profile entirely and made Encode ~24% faster than stdlib instead
-> of a wash.
+> **2026-11-07 optimizations (`parser.go`, `decode.go`, `encode.go`, `pool.front.go`):**
+> 1. **Sequential array & object cursors (`curIdx`/`curPos` in `jsonArrayReader`, `nextPos` in `jsonReader`):** Advancing sequentially across array elements and object fields is now $O(1)$ per element/field instead of rewinding to `start` on every lookup ($O(N^2)$), while falling back to `start` on out-of-order access.
+> 2. **Eliminated redundant `skipObject` error allocation:** `jsonReader.Object` and `jsonArrayReader.Object` now fast-path when `innerReader` already reached the closing `}` and consume `{` before `skipObject()` on fallback, eliminating `400` spurious heap allocations per 100-item batch.
+> 3. **Embedded root state & array readers/writers (`rootP`, `rootSt`, `arr`):** `jsonWriter` and `jsonReader` hold their root `encodeState`, `parser`, and active `jsonArrayWriter`/`jsonArrayReader` inline inside the pooled struct, and `pool.front.go` reuses readers/writers via a single-threaded free-list in WASM.
 
 ### WASM Binary Size
 

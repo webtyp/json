@@ -33,10 +33,12 @@ type Writer interface {
 }
 
 type jsonWriter struct {
-	b     *fmt.Conv
-	first bool
-	st    *encodeState
-	open  *jsonArrayWriter
+	b      *fmt.Conv
+	first  bool
+	st     *encodeState
+	open   *jsonArrayWriter
+	rootSt encodeState
+	arr    jsonArrayWriter
 }
 
 func (w *jsonWriter) settle() {
@@ -153,7 +155,7 @@ func (w *jsonWriter) Array(name string, n int) model.ArrayWriter {
 	w.maybeComma()
 	w.writeKey(name)
 	w.b.WriteByte('[')
-	aw := &jsonArrayWriter{
+	w.arr = jsonArrayWriter{
 		b:     w.b,
 		first: true,
 		name:  name,
@@ -162,11 +164,11 @@ func (w *jsonWriter) Array(name string, n int) model.ArrayWriter {
 	}
 	if n <= 0 {
 		w.b.WriteByte(']')
-		aw.closed = true
+		w.arr.closed = true
 	} else {
-		w.open = aw
+		w.open = &w.arr
 	}
-	return aw
+	return &w.arr
 }
 
 type jsonArrayWriter struct {
@@ -293,15 +295,16 @@ func (w *jsonArrayWriter) Close() {
 func Encode(data model.Encodable, output any) error {
 	b := fmt.GetConv()
 	defer b.PutConv()
-	st := &encodeState{}
 
+	var rootErr error
 	if data == nil || data.IsNil() {
 		b.WriteString("null")
 	} else {
 		w := getWriter()
 		w.b = b
 		w.first = true
-		w.st = st
+		w.rootSt = encodeState{}
+		w.st = &w.rootSt
 		w.open = nil
 
 		var slice model.FielderSlice
@@ -321,7 +324,7 @@ func Encode(data model.Encodable, output any) error {
 					iw := getWriter()
 					iw.b = b
 					iw.first = true
-					iw.st = st
+					iw.st = w.st
 					iw.open = nil
 					if it.IsNil() {
 						b.WriteString("null")
@@ -343,14 +346,15 @@ func Encode(data model.Encodable, output any) error {
 			w.settle()
 			b.WriteByte('}')
 		}
+		rootErr = w.rootSt.err
 		putWriter(w)
 	}
 
 	if b.GetString(fmt.BuffErr) != "" {
 		return fmt.Err(b.GetString(fmt.BuffErr))
 	}
-	if st.err != nil {
-		return st.err
+	if rootErr != nil {
+		return rootErr
 	}
 
 	switch out := output.(type) {

@@ -43,11 +43,11 @@ func Decode(input any, data model.Decodable) error {
 		return fmt.Err("json", "decode", "input must be []byte, string, or json.Reader")
 	}
 
-	p := parser{data: raw}
-	p.skipWhitespace()
-
 	r := getReader()
-	r.p = &p
+	r.rootP = parser{data: raw}
+	r.p = &r.rootP
+	r.p.skipWhitespace()
+	r.nextPos = 0
 	r.err = nil
 	defer putReader(r)
 
@@ -60,25 +60,24 @@ func Decode(input any, data model.Decodable) error {
 
 	if slice != nil {
 		// Special case for root level arrays of Fielders
-		if p.peek() != '[' {
-			return fmt.Err("json", "decode", "expected array, got "+string(p.peek()))
+		if r.p.peek() != '[' {
+			return fmt.Err("json", "decode", "expected array, got "+string(r.p.peek()))
 		}
-		arrayStart := p.pos
-		ar := jsonArrayReader{p: &p, start: arrayStart}
-		for i := 0; i < ar.Len(); i++ {
+		r.arr = jsonArrayReader{p: r.p, start: r.p.pos}
+		n := r.arr.Len()
+		for i := 0; i < n; i++ {
 			it := slice.Append()
 			if dec, ok := it.(model.Decodable); ok {
-				ar.Object(i, dec)
+				r.arr.Object(i, dec)
 			}
 		}
 		return nil
 	}
 
-	if p.peek() != '{' {
-		return fmt.Err("json", "decode", "expected object, got "+string(p.peek()))
+	if r.p.peek() != '{' {
+		return fmt.Err("json", "decode", "expected object, got "+string(r.p.peek()))
 	}
-	start := p.pos
-	r.start = start
+	r.start = r.p.pos
 	data.DecodeFields(r)
 	return r.err
 }
